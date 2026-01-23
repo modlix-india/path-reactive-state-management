@@ -9,8 +9,10 @@ export class StoreExtractor extends TokenValueExtractor {
     this.prefix = prefix;
   }
   protected getValueInternal(token: string) {
-    let parts: string[] = token.split(TokenValueExtractor.REGEX_DOT);
-    return this.retrieveElementFrom(token, parts, 1, this.store);
+    const prefix = this.getPrefix();
+    const path = token.substring(prefix.length);
+    const parts = TokenValueExtractor.splitPath(path);
+    return this.retrieveElementFrom(token, parts, 0, this.store);
   }
   getPrefix(): string {
     return this.prefix;

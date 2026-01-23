@@ -6,7 +6,6 @@ import {
   Operation,
   TokenValueExtractor,
 } from "@fincity/kirun-js";
-import { StoreExtractor } from "./StoreExtractor";
 
 class StoreException extends Error {
   cause?: Error;
@@ -17,6 +16,19 @@ class StoreException extends Error {
   public getCause(): Error | undefined {
     return this.cause;
   }
+}
+
+function isQuotedKey(key: any): boolean {
+  if (typeof key !== 'string') return false;
+  const str = key as string;
+  return (str.startsWith('"') && str.endsWith('"')) ||
+         (str.startsWith("'") && str.endsWith("'"));
+}
+
+function stripQuotes(key: any): any {
+  if (!isQuotedKey(key)) return key;
+  const str = key as string;
+  return str.substring(1, str.length - 1);
 }
 
 export const setStoreData = (
@@ -49,6 +61,7 @@ export const setStoreData = (
   const ops = expression.getOperations();
   let el = store;
   let token = tokens.removeLast();
+
   let mem =
     token instanceof ExpressionTokenValue
       ? (token as ExpressionTokenValue).getElement()
@@ -61,10 +74,38 @@ export const setStoreData = (
 
   let op: Operation = ops.removeLast();
   while (!ops.isEmpty()) {
-    if (op == Operation.OBJECT_OPERATOR) {
-      el = getDataFromObject(el, mem, ops.peekLast());
+    // Strip quotes if present (from bracket notation like ["key"] or ['key'])
+    const cleanMem = stripQuotes(mem);
+
+    // Check if this should be treated as object access even with ARRAY_OPERATOR
+    // (happens with bracket notation using string keys like obj["key.with.dots"])
+    // A valid array index is either a number type or a string that represents an integer
+    const isArrayIndex = typeof cleanMem === 'number' ||
+                         (typeof cleanMem === 'string' && /^\d+$/.test(cleanMem));
+    const treatAsObject = op == Operation.OBJECT_OPERATOR ||
+                          (op == Operation.ARRAY_OPERATOR && !isArrayIndex);
+
+    // Need to check what type to create for the NEXT level
+    // Peek at the next token to determine if it's numeric
+    let nextOp = ops.peekLast();
+    if (!tokens.isEmpty()) {
+      const nextToken = tokens.peekLast();
+      const nextMem = nextToken instanceof ExpressionTokenValue
+        ? (nextToken as ExpressionTokenValue).getElement()
+        : nextToken.getExpression();
+      const nextCleanMem = stripQuotes(nextMem);
+      const nextIsArrayIndex = typeof nextCleanMem === 'number' ||
+                               (typeof nextCleanMem === 'string' && /^\d+$/.test(nextCleanMem));
+      // If next operation is [ but with non-numeric key, treat as object creation
+      if (nextOp == Operation.ARRAY_OPERATOR && !nextIsArrayIndex) {
+        nextOp = Operation.OBJECT_OPERATOR;
+      }
+    }
+
+    if (treatAsObject) {
+      el = getDataFromObject(el, cleanMem, nextOp);
     } else {
-      el = getDataFromArray(el, mem, ops.peekLast());
+      el = getDataFromArray(el, cleanMem, nextOp);
     }
 
     op = ops.removeLast();
@@ -74,9 +115,20 @@ export const setStoreData = (
         ? (token as ExpressionTokenValue).getElement()
         : token.getExpression();
   }
-  if (op == Operation.OBJECT_OPERATOR)
-    putDataInObject(el, mem, value, deleteKey);
-  else putDataInArray(el, mem, value);
+
+  // Strip quotes if present for the final assignment
+  const cleanMem = stripQuotes(mem);
+
+  // Check if this should be treated as object access for the final assignment
+  const isArrayIndex = typeof cleanMem === 'number' ||
+                       (typeof cleanMem === 'string' && /^\d+$/.test(cleanMem));
+  const treatAsObject = op == Operation.OBJECT_OPERATOR ||
+                        (op == Operation.ARRAY_OPERATOR && !isArrayIndex);
+
+  if (treatAsObject)
+    putDataInObject(el, cleanMem, value, deleteKey);
+  else
+    putDataInArray(el, cleanMem, value);
 };
 
 function getDataFromArray(el: any, mem: string, nextOp: Operation): any {

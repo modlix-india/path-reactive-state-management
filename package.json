@@ -1,6 +1,6 @@
 {
   "name": "@fincity/path-reactive-state-management",
-  "version": "1.7.3",
+  "version": "1.9.0",
   "description": "A simple mutation based state mangement, where you set and get data by paths and listen to changes on paths for actions",
   "keywords": [
     "Reactive",
@@ -33,20 +33,20 @@
   ],
   "license": "MIT",
   "peerDependencies": {
-    "@fincity/kirun-js": "^2.2.1",
+    "@fincity/kirun-js": "^2.16.2",
     "rxjs": "^7.8.1"
   },
   "devDependencies": {
-    "@parcel/packager-ts": "^2.11.0",
-    "@parcel/reporter-bundle-buddy": "^2.11.0",
-    "@parcel/transformer-typescript-types": "^2.11.0",
-    "@tsconfig/recommended": "^1.0.3",
-    "@types/jest": "^29.5.12",
-    "parcel": "^2.11.0",
-    "typescript": "^5.3.3",
-    "ts-loader": "^9.5.1",
+    "@parcel/packager-ts": "^2.15.2",
+    "@parcel/reporter-bundle-buddy": "^2.15.2",
+    "@parcel/transformer-typescript-types": "^2.15.2",
+    "@tsconfig/recommended": "^1.0.8",
+    "@types/jest": "^29.5.14",
     "jest": "^29.7.0",
-    "ts-jest": "^29.1.2"
+    "parcel": "^2.15.2",
+    "ts-jest": "^29.3.4",
+    "ts-loader": "^9.5.2",
+    "typescript": "^5.8.3"
   },
   "jest": {
     "transform": {
