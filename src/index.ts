@@ -1,6 +1,5 @@
-import { from, Subject } from "rxjs";
+import { Subject } from "rxjs";
 import {
-  Expression,
   ExpressionEvaluator,
   isNullValue,
   TokenValueExtractor,
@@ -25,10 +24,14 @@ export const useStore = function <Type extends Object>(
     (e): [string, TokenValueExtractor] => [e.getPrefix(), e]
   );
 
+  const storeExtractor = new StoreExtractor(store$, `${pathPrefix}.`);
   const extractionMap = new Map<string, TokenValueExtractor>([
     ...tokenExtractors,
-    [`${pathPrefix}.`, new StoreExtractor(store$, `${pathPrefix}.`)],
+    [`${pathPrefix}.`, storeExtractor],
   ]);
+
+  // Set the extraction map on the store extractor so it can resolve dynamic expressions
+  storeExtractor.setExtractionMap(extractionMap);
 
   setStoreSubject$.subscribe(({ path }) => {
     const set = new Set();
@@ -69,7 +72,7 @@ export const useStore = function <Type extends Object>(
       const tokenExtractors = (tve ?? []).map(
         (e): [string, TokenValueExtractor] => [e.getPrefix(), e]
       );
-      return ev.evaluate(new Map([...extractionMap, ...tokenExtractors]));
+      return ev.evaluate(new Map([...Array.from(extractionMap), ...tokenExtractors]));
     }
     return ev.evaluate(extractionMap);
   }

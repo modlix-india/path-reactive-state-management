@@ -1,11 +1,9 @@
 import {
-  Expression,
-  ExpressionEvaluator,
-  ExpressionTokenValue,
   isNullValue,
   Operation,
   TokenValueExtractor,
 } from "@fincity/kirun-js";
+import { resolveDynamicPath } from "./util/PathResolver";
 
 class StoreException extends Error {
   cause?: Error;
@@ -39,104 +37,159 @@ export const setStoreData = (
   extractionMap: Map<string, TokenValueExtractor>,
   deleteKey?: boolean
 ) => {
-  const expression = new Expression(path);
-  const tokens = expression.getTokens();
-  const tokenString = expression.getTokens().peekLast().getExpression();
-  if (!tokenString.startsWith(prefix)) {
-    throw new StoreException(`Prefix - ${prefix} is not found`);
+  // Validate prefix
+  if (!path.startsWith(prefix)) {
+    throw new StoreException(`Prefix - ${prefix} is not found in path: ${path}`);
   }
-  for (let i = 0; i < tokens.size(); i++) {
-    let ex = tokens.get(i);
-    if (!(ex instanceof Expression)) continue;
-    tokens.set(
-      i,
-      new ExpressionTokenValue(
-        path,
-        new ExpressionEvaluator(ex as Expression).evaluate(extractionMap)
-      )
+
+  // Ensure all StoreExtractors in the map have the extraction map set
+  for (const [, extractor] of Array.from(extractionMap.entries())) {
+    if (typeof (extractor as any).setExtractionMap === 'function') {
+      (extractor as any).setExtractionMap(extractionMap);
+    }
+  }
+
+  // Resolve any dynamic expressions in brackets
+  // Uses shared utility that leverages kirun-js ExpressionEvaluator
+  const resolvedPath = resolveDynamicPath(path, extractionMap);
+
+  // Use TokenValueExtractor.splitPath to parse the path
+  const parts = TokenValueExtractor.splitPath(resolvedPath);
+
+  if (parts.length < 2) {
+    throw new StoreException(
+      `Invalid path: ${resolvedPath} - must have at least prefix and one segment`
     );
   }
 
-  tokens.removeLast();
-  const ops = expression.getOperations();
+  // Start from index 1 (skip the prefix like 'Bamboo')
   let el = store;
-  let token = tokens.removeLast();
 
-  let mem =
-    token instanceof ExpressionTokenValue
-      ? (token as ExpressionTokenValue).getElement()
-      : token.getExpression();
+  // Navigate to the parent of the final element
+  for (let i = 1; i < parts.length - 1; i++) {
+    const part = parts[i];
+    const nextPart = parts[i + 1];
 
-  if (ops.isEmpty()) {
-    el[mem] = value;
-    return;
-  }
+    // Parse bracket segments within this part
+    const segments = parseBracketSegments(part);
 
-  let op: Operation = ops.removeLast();
-  while (!ops.isEmpty()) {
-    // Strip quotes if present (from bracket notation like ["key"] or ['key'])
-    const cleanMem = stripQuotes(mem);
+    for (let j = 0; j < segments.length; j++) {
+      const segment = segments[j];
+      const isLastSegment = i === parts.length - 2 && j === segments.length - 1;
+      const nextOp = isLastSegment
+        ? getOpForSegment(parts[parts.length - 1])
+        : getOpForSegment(nextPart);
 
-    // Check if this should be treated as object access even with ARRAY_OPERATOR
-    // (happens with bracket notation using string keys like obj["key.with.dots"])
-    // A valid array index is either a number type or a string that represents an integer
-    const isArrayIndex = typeof cleanMem === 'number' ||
-                         (typeof cleanMem === 'string' && /^\d+$/.test(cleanMem));
-    const treatAsObject = op == Operation.OBJECT_OPERATOR ||
-                          (op == Operation.ARRAY_OPERATOR && !isArrayIndex);
-
-    // Need to check what type to create for the NEXT level
-    // Peek at the next token to determine if it's numeric
-    let nextOp = ops.peekLast();
-    if (!tokens.isEmpty()) {
-      const nextToken = tokens.peekLast();
-      const nextMem = nextToken instanceof ExpressionTokenValue
-        ? (nextToken as ExpressionTokenValue).getElement()
-        : nextToken.getExpression();
-      const nextCleanMem = stripQuotes(nextMem);
-      const nextIsArrayIndex = typeof nextCleanMem === 'number' ||
-                               (typeof nextCleanMem === 'string' && /^\d+$/.test(nextCleanMem));
-      // If next operation is [ but with non-numeric key, treat as object creation
-      if (nextOp == Operation.ARRAY_OPERATOR && !nextIsArrayIndex) {
-        nextOp = Operation.OBJECT_OPERATOR;
+      if (isArrayIndex(segment)) {
+        el = getDataFromArray(el, segment, nextOp);
+      } else {
+        el = getDataFromObject(el, stripQuotes(segment), nextOp);
       }
     }
-
-    if (treatAsObject) {
-      el = getDataFromObject(el, cleanMem, nextOp);
-    } else {
-      el = getDataFromArray(el, cleanMem, nextOp);
-    }
-
-    op = ops.removeLast();
-    if (!tokens.isEmpty()) token = tokens.removeLast();
-    mem =
-      token instanceof ExpressionTokenValue
-        ? (token as ExpressionTokenValue).getElement()
-        : token.getExpression();
   }
 
-  // Strip quotes if present for the final assignment
-  const cleanMem = stripQuotes(mem);
+  // Handle the final part (set the value)
+  const finalPart = parts[parts.length - 1];
+  const finalSegments = parseBracketSegments(finalPart);
 
-  // Check if this should be treated as object access for the final assignment
-  const isArrayIndex = typeof cleanMem === 'number' ||
-                       (typeof cleanMem === 'string' && /^\d+$/.test(cleanMem));
-  const treatAsObject = op == Operation.OBJECT_OPERATOR ||
-                        (op == Operation.ARRAY_OPERATOR && !isArrayIndex);
+  // Navigate through all but the last segment of the final part
+  for (let j = 0; j < finalSegments.length - 1; j++) {
+    const segment = finalSegments[j];
+    const nextOp = isArrayIndex(finalSegments[j + 1])
+      ? Operation.ARRAY_OPERATOR
+      : Operation.OBJECT_OPERATOR;
 
-  if (treatAsObject)
-    putDataInObject(el, cleanMem, value, deleteKey);
-  else
-    putDataInArray(el, cleanMem, value);
+    if (isArrayIndex(segment)) {
+      el = getDataFromArray(el, segment, nextOp);
+    } else {
+      el = getDataFromObject(el, stripQuotes(segment), nextOp);
+    }
+  }
+
+  // Set the final value
+  const lastSegment = finalSegments[finalSegments.length - 1];
+  if (isArrayIndex(lastSegment)) {
+    putDataInArray(el, lastSegment, value);
+  } else {
+    putDataInObject(el, stripQuotes(lastSegment), value, deleteKey);
+  }
 };
+
+/**
+ * Parse a path segment that may contain bracket notation.
+ * E.g., "addresses[0]" -> ["addresses", "0"]
+ * E.g., 'obj["key"]' -> ["obj", "key"]
+ */
+function parseBracketSegments(part: string): string[] {
+  const segments: string[] = [];
+  let start = 0;
+  let i = 0;
+
+  while (i < part.length) {
+    if (part[i] === "[") {
+      if (i > start) {
+        segments.push(part.substring(start, i));
+      }
+      // Find matching ]
+      let end = i + 1;
+      let inQuote = false;
+      let quoteChar = "";
+      while (end < part.length) {
+        if (inQuote) {
+          if (part[end] === quoteChar && part[end - 1] !== "\\") {
+            inQuote = false;
+          }
+        } else {
+          if (part[end] === '"' || part[end] === "'") {
+            inQuote = true;
+            quoteChar = part[end];
+          } else if (part[end] === "]") {
+            break;
+          }
+        }
+        end++;
+      }
+      // Extract bracket content (without the brackets)
+      segments.push(part.substring(i + 1, end));
+      start = end + 1;
+      i = start;
+    } else {
+      i++;
+    }
+  }
+
+  if (start < part.length) {
+    segments.push(part.substring(start));
+  }
+
+  return segments.length > 0 ? segments : [part];
+}
+
+/**
+ * Check if a segment is an array index (numeric)
+ */
+function isArrayIndex(segment: string): boolean {
+  // Check if it's a pure number (possibly negative)
+  return /^-?\d+$/.test(segment);
+}
+
+/**
+ * Determine the operation type for the next segment
+ */
+function getOpForSegment(segment: string): Operation {
+  // Check if the segment starts with a bracket or is a pure number
+  if (isArrayIndex(segment) || segment.startsWith("[")) {
+    return Operation.ARRAY_OPERATOR;
+  }
+  return Operation.OBJECT_OPERATOR;
+}
 
 function getDataFromArray(el: any, mem: string, nextOp: Operation): any {
   if (!Array.isArray(el))
     throw new StoreException(`Expected an array but found  ${el}`);
 
-  const index = parseInt(mem);
-  if (isNaN(index))
+  const index = Number.parseInt(mem);
+  if (Number.isNaN(index))
     throw new StoreException(`Expected an array index but found  ${mem}`);
   if (index < 0)
     throw new StoreException(`Array index is out of bound -  ${mem}`);
@@ -167,8 +220,8 @@ function putDataInArray(el: any, mem: string, value: any): void {
   if (!Array.isArray(el))
     throw new StoreException(`Expected an array but found  ${el}`);
 
-  const index = parseInt(mem);
-  if (isNaN(index))
+  const index = Number.parseInt(mem);
+  if (Number.isNaN(index))
     throw new StoreException(`Expected an array index but found  ${mem}`);
   if (index < 0)
     throw new StoreException(`Array index is out of bound -  ${mem}`);
