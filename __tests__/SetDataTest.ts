@@ -104,4 +104,18 @@ describe("setdata tests", () => {
     setStoreData("Store.x.y", store, false, "Store", map, undefined);
     expect(store.x.y).toStrictEqual(false);
   });
+
+  test("setData - in array index when there is nothing", () => {
+    let store: any = { arr: [] };
+
+    const map = new Map([["Store.", new StoreExtractor(store, `Store.`)]]);
+
+    setStoreData("Store.arr[2]", store, 100, "Store", map, undefined);
+    expect(store.arr.length).toBe(3);
+    expect(store.arr[0]).toBeUndefined();
+    expect(store.arr[1]).toBeUndefined();
+    expect(store.arr[2]).toBe(100);
+
+    console.log(store);
+  });
 });
