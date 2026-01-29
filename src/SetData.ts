@@ -75,10 +75,23 @@ export const setStoreData = (
 
     for (let j = 0; j < segments.length; j++) {
       const segment = segments[j];
-      const isLastSegment = i === parts.length - 2 && j === segments.length - 1;
-      const nextOp = isLastSegment
-        ? getOpForSegment(parts[parts.length - 1])
-        : getOpForSegment(nextPart);
+      const isLastSegmentOfPart = j === segments.length - 1;
+
+      let nextOp: Operation;
+      if (isLastSegmentOfPart) {
+        // This is the last segment of this part, look at the next part
+        const isLastPart = i === parts.length - 2;
+        if (isLastPart) {
+          nextOp = getOpForSegment(parts[parts.length - 1]);
+        } else {
+          nextOp = getOpForSegment(nextPart);
+        }
+      } else {
+        // There are more segments in this part, look at the next segment
+        nextOp = isArrayIndex(segments[j + 1])
+          ? Operation.ARRAY_OPERATOR
+          : Operation.OBJECT_OPERATOR;
+      }
 
       if (isArrayIndex(segment)) {
         el = getDataFromArray(el, segment, nextOp);

@@ -94,6 +94,13 @@ describe("setdata tests", () => {
     expect(Object.keys(store.x)).toStrictEqual(["z", "h"]);
     setStoreData("Store.x.h", store, null, "Store", map, true);
     expect(Object.keys(store.x)).toStrictEqual(["z"]);
+
+    setStoreData("Store.other[0].value", store, 100, "Store", map, undefined);
+    expect(store.other[0].value).toBe(100);
+
+    setStoreData("Store.someOther.value", store, undefined, "Store", map, true);
+    expect(store.someOther.hasOwnProperty("value")).toBeFalsy();
+
   });
 
   test("setData - False value", () => {
