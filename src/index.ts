@@ -62,12 +62,16 @@ export const useStore = function <Type extends Object>(
     value: T,
     deleteKey: boolean = false
   ): void {
-    setStoreData(path, store$, value, pathPrefix, extractionMap, deleteKey);
-    setStoreSubject$.next({ path, value });
+    // Trim whitespace from path before using it
+    const trimmedPath = path.trim();
+    setStoreData(trimmedPath, store$, value, pathPrefix, extractionMap, deleteKey);
+    setStoreSubject$.next({ path: trimmedPath, value });
   }
 
   function getData(path: string, ...tve: Array<TokenValueExtractor>) {
-    let ev: ExpressionEvaluator = new ExpressionEvaluator(path);
+    // Trim whitespace from path before using it
+    const trimmedPath = path.trim();
+    let ev: ExpressionEvaluator = new ExpressionEvaluator(trimmedPath);
     if (tve.length) {
       const tokenExtractors = (tve ?? []).map(
         (e): [string, TokenValueExtractor] => [e.getPrefix(), e]
@@ -127,7 +131,9 @@ export const useStore = function <Type extends Object>(
       if (isNullValue(path[i])) continue;
       const key = uuid();
       let subject: Subject<{ path: string; value: any; set: Set<any> }>;
-      const curPath = callForAllChildrenActivity ? "*" + path[i] : path[i];
+      // Trim whitespace from path before using it
+      const trimmedPath = path[i].trim();
+      const curPath = callForAllChildrenActivity ? "*" + trimmedPath : trimmedPath;
       if (listeners.has(curPath)) {
         subject = listeners.get(curPath)!;
       } else {

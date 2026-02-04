@@ -26,7 +26,8 @@ function isQuotedKey(key: any): boolean {
 function stripQuotes(key: any): any {
   if (!isQuotedKey(key)) return key;
   const str = key as string;
-  return str.substring(1, str.length - 1);
+  // Remove quotes and trim any leading/trailing whitespace
+  return str.substring(1, str.length - 1).trim();
 }
 
 export const setStoreData = (
