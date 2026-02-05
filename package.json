@@ -1,6 +1,6 @@
 {
   "name": "@fincity/path-reactive-state-management",
-  "version": "2.9.0",
+  "version": "2.9.1",
   "description": "A simple mutation based state mangement, where you set and get data by paths and listen to changes on paths for actions",
   "keywords": [
     "Reactive",
@@ -33,7 +33,7 @@
   ],
   "license": "MIT",
   "peerDependencies": {
-    "@fincity/kirun-js": "^3.2.0",
+    "@fincity/kirun-js": "^3.2.1",
     "rxjs": "^7.8.1"
   },
   "devDependencies": {
