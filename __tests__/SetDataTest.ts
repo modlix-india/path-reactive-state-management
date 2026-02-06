@@ -125,4 +125,28 @@ describe("setdata tests", () => {
 
     console.log(store);
   });
+
+  test("setData - set empty object then set nested property with numeric key", () => {
+    const { setData, getData } = useStore({}, "Bamboo");
+
+    setData("Bamboo.x", {});
+    expect(getData("Bamboo.x")).toStrictEqual({});
+
+    setData("Bamboo.x.1", "kiran");
+    expect(getData("Bamboo.x.1")).toBe("kiran");
+    expect(getData("Bamboo.x")).toStrictEqual({ "1": "kiran" });
+  });
+
+  test("setData - set empty array then set element with numeric index", () => {
+    const { setData, getData } = useStore({}, "Bamboo");
+
+    setData("Bamboo.arr", []);
+    expect(getData("Bamboo.arr")).toStrictEqual([]);
+
+    setData("Bamboo.arr.1", "value");
+    expect(getData("Bamboo.arr.1")).toBe("value");
+    const arr = getData("Bamboo.arr");
+    expect(arr.length).toBe(2);
+    expect(arr[1]).toBe("value");
+  });
 });

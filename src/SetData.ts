@@ -94,7 +94,7 @@ export const setStoreData = (
           : Operation.OBJECT_OPERATOR;
       }
 
-      if (isArrayIndex(segment)) {
+      if (isArrayIndex(segment) && Array.isArray(el)) {
         el = getDataFromArray(el, segment, nextOp);
       } else {
         el = getDataFromObject(el, stripQuotes(segment), nextOp);
@@ -113,7 +113,7 @@ export const setStoreData = (
       ? Operation.ARRAY_OPERATOR
       : Operation.OBJECT_OPERATOR;
 
-    if (isArrayIndex(segment)) {
+    if (isArrayIndex(segment) && Array.isArray(el)) {
       el = getDataFromArray(el, segment, nextOp);
     } else {
       el = getDataFromObject(el, stripQuotes(segment), nextOp);
@@ -122,7 +122,7 @@ export const setStoreData = (
 
   // Set the final value
   const lastSegment = finalSegments[finalSegments.length - 1];
-  if (isArrayIndex(lastSegment)) {
+  if (isArrayIndex(lastSegment) && Array.isArray(el)) {
     putDataInArray(el, lastSegment, value);
   } else {
     putDataInObject(el, stripQuotes(lastSegment), value, deleteKey);
