@@ -34,27 +34,32 @@ export const useStore = function <Type extends Object>(
   storeExtractor.setExtractionMap(extractionMap);
 
   setStoreSubject$.subscribe(({ path }) => {
+    if (listeners.size === 0) return;
     const set = new Set();
-    Array.from(listeners.entries())
-      .filter(([p]) => {
-        const chkParents = p[0] === "*";
-        const chkPath = chkParents ? p.substring(1) : p;
-        if (
-          path == chkPath ||
-          chkPath.startsWith(path + ".") ||
-          chkPath.startsWith(path + "[")
-        )
-          return true;
-
-        return (
-          chkParents &&
-          (path.startsWith(`${chkPath}.`) || path.startsWith(`${chkPath}[`))
-        );
-      })
-      .forEach(([p, sub]) => {
-        const actualPath = p[0] === "*" ? p.substring(1) : p;
+    const pathDot = path + ".";
+    const pathBracket = path + "[";
+    // Iterate Map directly instead of converting to Array (avoids O(n) allocation)
+    listeners.forEach((sub, p) => {
+      const chkParents = p[0] === "*";
+      const chkPath = chkParents ? p.substring(1) : p;
+      let matched = false;
+      if (
+        path === chkPath ||
+        chkPath.startsWith(pathDot) ||
+        chkPath.startsWith(pathBracket)
+      ) {
+        matched = true;
+      } else if (
+        chkParents &&
+        (path.startsWith(chkPath + ".") || path.startsWith(chkPath + "["))
+      ) {
+        matched = true;
+      }
+      if (matched) {
+        const actualPath = chkParents ? chkPath : p;
         sub.next({ path: actualPath, value: getData(actualPath, ...tve), set });
-      });
+      }
+    });
   });
 
   function setData<T>(
