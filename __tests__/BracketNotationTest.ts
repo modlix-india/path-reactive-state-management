@@ -96,6 +96,37 @@ describe("Bracket Notation with Dotted Keys", () => {
       expect(getData('Context.obj["key@#$%"]')).toBe("specialValue");
     });
 
+    // A hyphen is also the subtraction operator, so this is the one special
+    // character worth pinning down. `http-equiv` is the real case: an app
+    // definition's properties.metas.<uid> entries carry an attribute with that
+    // exact name, and the builder binds form controls straight at it.
+    test("should handle key with a hyphen", () => {
+      const { getData, setData } = useStore({}, "Store");
+
+      setData('Store.obj["key-with-hyphen"]', "hyphenValue");
+      expect(getData('Store.obj["key-with-hyphen"]')).toBe("hyphenValue");
+
+      setData("Store.obj['single-quoted-hyphen']", "sqValue");
+      expect(getData("Store.obj['single-quoted-hyphen']")).toBe("sqValue");
+    });
+
+    test("should set http-equiv on a nested map entry, then read it back", () => {
+      const { getData, setData } = useStore({}, "Store");
+
+      setData('Store.doc.properties.metas.m1["http-equiv"]', "X-UA-Compatible");
+      setData("Store.doc.properties.metas.m1.content", "IE=edge");
+
+      expect(getData('Store.doc.properties.metas.m1["http-equiv"]')).toBe(
+        "X-UA-Compatible",
+      );
+      expect(getData("Store.doc.properties.metas.m1.content")).toBe("IE=edge");
+      // The hyphenated key must be a real sibling, not a nested object.
+      expect(getData("Store.doc.properties.metas.m1")).toStrictEqual({
+        "http-equiv": "X-UA-Compatible",
+        content: "IE=edge",
+      });
+    });
+
     test("should handle key with spaces", () => {
       const { getData, setData } = useStore({}, "Store");
 
